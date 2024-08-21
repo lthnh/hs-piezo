@@ -1,0 +1,51 @@
+#include <stdio.h>
+
+#include "driver/spi_common.h"
+#include "adc.h"
+
+// define pins for VSPI
+#define SCLK 6
+#define MISO 2
+#define MOSI 7
+
+// define CS pin for MCP3204
+#define CS0 10
+
+// define command for MCP3204
+#define START_DIFF 0x04
+#define SEL_CH0 0x00
+
+void app_main(void) {
+    spi_host_device_t host = SPI2_HOST;
+    spi_bus_config_t bus_config = {
+        .mosi_io_num = MOSI,
+        .miso_io_num = MISO,
+        .sclk_io_num = SCLK,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .max_transfer_sz = 3,
+        .flags = SPICOMMON_BUSFLAG_MASTER | SPICOMMON_BUSFLAG_SCLK |
+        SPICOMMON_BUSFLAG_MISO | SPICOMMON_BUSFLAG_MISO |
+        SPICOMMON_BUSFLAG_IOMUX_PINS, .isr_cpu_id =
+        ESP_INTR_CPU_AFFINITY_AUTO, .intr_flags = ESP_INTR_FLAG_LEVEL3,
+    };
+    spi_bus_initialize(host, &bus_config, SPI_DMA_DISABLED);
+
+    mcp320x_t mcp3204 = {
+        .cs_pin = CS0,
+        .expected_sampl_freq = 20000,
+        .sampl_count = 30,
+        .vref = 4.8,
+    };
+    uint32_t result = 0;
+    ESP_ERROR_CHECK(mcp320x_add(host, &mcp3204));
+    // int real_freq = 0;
+    // ESP_ERROR_CHECK(spi_device_get_actual_freq(device_handle,
+    // &real_freq));
+    // assert(abs(real_freq*1000 - expected_freq) < 100);
+    ESP_ERROR_CHECK(mcp320x_sample(&mcp3204, &result));
+    printf("%lu\n", result);
+    ESP_ERROR_CHECK(mcp320x_remove(&mcp3204));
+
+    ESP_ERROR_CHECK(spi_bus_free(host));
+}
