@@ -353,7 +353,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
                     spp_hs_enable_notif = true;
                     hs_last_wake_time = xTaskGetTickCount();
                     if (handle_update_bp_val != NULL) {
-                        xTaskDelete(handle_update_bp_val);
+                        vTaskDelete(handle_update_bp_val);
                         handle_update_bp_val = NULL;
                         xTaskCreate(update_both_value, "update hs and bp value", 8192, (void *) &sample_fn, 1, &handle_update_val);
                     } else {
@@ -373,7 +373,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
                     spp_bp_enable_notif = true;
                     bp_last_wake_time = xTaskGetTickCount();
                     if (handle_update_hs_val != NULL) {
-                        xTaskDelete(handle_update_hs_val);
+                        vTaskDelete(handle_update_hs_val);
                         handle_update_hs_val = NULL;
                         xTaskCreate(update_both_value, "update hs and bp value", 8192, (void *) &sample_fn, 1, &handle_update_val);
                     } else {

@@ -14,10 +14,6 @@
 #define SINGLE (1 << 1)
 #define SEL_CH(x) (x << 6)
 
-// define command for MCP3202
-#define START 0x01
-#define OPT 0xA0
-
 typedef enum {
     CH0,
     CH1,

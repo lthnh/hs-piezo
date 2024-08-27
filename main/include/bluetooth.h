@@ -23,7 +23,7 @@ typedef enum {
 } SPP_IDX;
 
 typedef struct {
-    esp_err_t (*fn)(mcp320x_t *, uint16_t *);
+    esp_err_t (*fn)(mcp320x_t *, uint16_t *, mcp320x_ch_t);
     mcp320x_t mcp320x;
 } sample_fn_t;
 
