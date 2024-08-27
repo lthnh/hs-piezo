@@ -48,6 +48,7 @@ static mcp320x_t mcp3204 = {
     .expected_sampl_freq = 30000,
     .sampl_count = 1,
     .vref = 3.3,
+    .single= false,
 };
 
 static esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();

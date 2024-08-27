@@ -25,7 +25,7 @@ static spi_transaction_t trans_desc = {
     .flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA,
     .length = 3 * 8,
     .rxlength = 3 * 8,  // defaults the value to length
-    .tx_data = {START_SIGNLE, SEL_CH0},
+    .tx_data = {START_SINGLE, SEL_CH0},
 };
 
 esp_err_t mcp320x_add(spi_host_device_t host, mcp320x_t *mcp320x) {
@@ -40,10 +40,16 @@ esp_err_t mcp320x_add(spi_host_device_t host, mcp320x_t *mcp320x) {
     return ESP_OK;
 }
 
-esp_err_t mcp320x_sample(mcp320x_t *mcp320x, uint16_t *result) {
+esp_err_t mcp320x_sample(mcp320x_t *mcp320x, uint16_t *result, mcp320x_ch_t ch) {
     ESP_RETURN_ON_ERROR(spi_device_acquire_bus(mcp320x->handle, portMAX_DELAY),
                         ADC_TAG, "device fails to acquire bus");
     *result = 0;
+    if (mcp320x->single = false && trans_desc.tx_data[0] != START) {
+        trans_desc.tx_data[0] = START;
+    }
+    if (trans_desc.tx_data[1] != SEL_CH(ch)) {
+        trans_desc.tx_data[1] = SEL_CH(ch);
+    }
     for (int i = 0; i < mcp320x->sampl_count; ++i) {
         ESP_RETURN_ON_ERROR(
             spi_device_transmit(mcp320x->handle, &trans_desc), "adc",
