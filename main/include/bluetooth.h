@@ -12,6 +12,12 @@
 #define GATTS_TABLE_TAG "GATTS_SPP"
 
 typedef enum {
+    HS,
+    BP,
+    CHAR_NUM,
+} CHAR_IDX;
+
+typedef enum {
     SPP_IDX_SVC,
     SPP_IDX_HEARTSOUND_CHAR,
     SPP_IDX_HEARTSOUND_VAL,

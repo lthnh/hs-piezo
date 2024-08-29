@@ -71,12 +71,12 @@ static const uint16_t char_ccc_uuid = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;
 static const uint16_t char_prop_read_notify =
     ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_NOTIFY;
 
-static uint16_t hs_value = 0;
-static uint16_t bp_value = 0;
-static uint16_t spp_hs_char_ccc_val = 0;
-static uint16_t spp_bp_char_ccc_val = 0;
-static bool spp_hs_enable_notif = false;
-static bool spp_bp_enable_notif = false;
+// 0: heart sound value, 1: blood pressure value
+static uint16_t char_val[CHAR_NUM] = {0};
+// ccc value for each characteristics, the order are as the comment above
+static uint16_t spp_char_ccc_val[CHAR_NUM] = {0};
+// simple variable to store notification state
+static bool spp_enable_notif[CHAR_NUM] = {false};
 
 static const esp_gatts_attr_db_t gatt_db[] = {
     [SPP_IDX_SVC] =
@@ -115,7 +115,7 @@ static const esp_gatts_attr_db_t gatt_db[] = {
                     .perm = ESP_GATT_PERM_READ,
                     .max_length = CHAR_VALUE_SIZE,
                     .length = CHAR_VALUE_SIZE,
-                    .value = (uint8_t *)&hs_value,
+                    .value = (uint8_t *)&char_val[HS],
                 },
         },
     [SPP_IDX_HEARTSOUND_CCC] =
@@ -128,7 +128,7 @@ static const esp_gatts_attr_db_t gatt_db[] = {
                     .perm = ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
                     .max_length = 2,
                     .length = 2,
-                    .value = (uint8_t *)&spp_hs_char_ccc_val,
+                    .value = (uint8_t *)&spp_char_ccc_val[HS],
                 },
         },
     [SPP_IDX_BLOODPRESSURE_CHAR] =
@@ -154,7 +154,7 @@ static const esp_gatts_attr_db_t gatt_db[] = {
                     .perm = ESP_GATT_PERM_READ,
                     .max_length = CHAR_VALUE_SIZE,
                     .length = CHAR_VALUE_SIZE,
-                    .value = (uint8_t *)&bp_value,
+                    .value = (uint8_t *)&char_val[BP],
                 },
         },
     [SPP_IDX_BLOODPRESSURE_CCC] =
@@ -167,7 +167,7 @@ static const esp_gatts_attr_db_t gatt_db[] = {
                     .perm = ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
                     .max_length = 2,
                     .length = 2,
-                    .value = (uint8_t *)&spp_bp_char_ccc_val,
+                    .value = (uint8_t *)&spp_char_ccc_val[BP],
                 },
         },
 };
@@ -268,21 +268,17 @@ void gap_event_handler(esp_gap_ble_cb_event_t event,
     }
 }
 
-static TaskHandle_t handle_update_hs_val = NULL;
-static TaskHandle_t handle_update_bp_val = NULL;
-static TaskHandle_t handle_update_val = NULL;
-static TickType_t hs_last_wake_time;
-static TickType_t bp_last_wake_time;
-static TickType_t last_wake_time;
+static TaskHandle_t handle_update_val[CHAR_NUM] = {NULL};
+static TickType_t last_wake_time[CHAR_NUM];
 static const TickType_t freq = 1;
 
 static void update_hs_value(void *pvParameters) {
     ESP_LOGI(UPDATE_VALUE_TAG, "update hs value task started");
     sample_fn_t sample_fn = *((sample_fn_t *)pvParameters);
     while (true) {
-        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &hs_value, CH0));
-        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_HEARTSOUND_VAL], sizeof(hs_value), (uint8_t *)&hs_value));
-        xTaskDelayUntil(&hs_last_wake_time, freq);
+        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &char_val[HS], CH0));
+        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_HEARTSOUND_VAL], sizeof(char_val[HS]), (uint8_t *)&char_val[HS]));
+        xTaskDelayUntil(&last_wake_time[HS], freq);
     }
 }
 
@@ -290,20 +286,9 @@ static void update_bp_value(void *pvParameters) {
     ESP_LOGI(UPDATE_VALUE_TAG, "update bp value task started");
     sample_fn_t sample_fn = *((sample_fn_t *)pvParameters);
     while (true) {
-        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &hs_value, CH2));
-        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL], sizeof(bp_value), (uint8_t *)&bp_value));
-        xTaskDelayUntil(&bp_last_wake_time, freq);
-    }
-}
-
-static void update_both_value(void *pvParameters) {
-    ESP_LOGI(UPDATE_VALUE_TAG, "update hs and bp value task started");
-    sample_fn_t sample_fn = *((sample_fn_t *)pvParameters);
-    while (true) {
-        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &hs_value, CH0));
-        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_HEARTSOUND_VAL], sizeof(hs_value), (uint8_t *)&hs_value));
-        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &hs_value, CH2));
-        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL], sizeof(bp_value), (uint8_t *)&bp_value)); xTaskDelayUntil(&last_wake_time, freq);
+        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &char_val[BP], CH2));
+        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL], sizeof(char_val[BP]), (uint8_t *)&char_val[BP]));
+        xTaskDelayUntil(&last_wake_time[BP], freq);
     }
 }
 
@@ -347,18 +332,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             if (param->write.handle == spp_handle_tab[SPP_IDX_HEARTSOUND_CCC]) {
                 switch ((param->write.value)[0]) {
                 case 0x00:
-                    spp_hs_enable_notif = false;
+                    spp_enable_notif[HS] = false;
                     break;
                 case 0x01:
-                    spp_hs_enable_notif = true;
-                    hs_last_wake_time = xTaskGetTickCount();
-                    if (handle_update_bp_val != NULL) {
-                        vTaskDelete(handle_update_bp_val);
-                        handle_update_bp_val = NULL;
-                        xTaskCreate(update_both_value, "update hs and bp value", 8192, (void *) &sample_fn, 1, &handle_update_val);
-                    } else {
-                        xTaskCreate(update_hs_value, "update hs_value", 8192, (void *) &sample_fn, 1, &handle_update_hs_val);
-                    }
+                    spp_enable_notif[HS] = true;
+                    last_wake_time[HS] = xTaskGetTickCount();
+                    xTaskCreate(update_hs_value, "update hs_value", 8192, (void *) &sample_fn, 1, &handle_update_val[HS]);
                     break;
                 default:
                     break;
@@ -367,18 +346,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             if (param->write.handle == spp_handle_tab[SPP_IDX_BLOODPRESSURE_CCC]) {
                 switch ((param->write.value)[0]) {
                 case 0x00:
-                    spp_bp_enable_notif = false;
+                    spp_enable_notif[BP] = false;
                     break;
                 case 0x01:
-                    spp_bp_enable_notif = true;
-                    bp_last_wake_time = xTaskGetTickCount();
-                    if (handle_update_hs_val != NULL) {
-                        vTaskDelete(handle_update_hs_val);
-                        handle_update_hs_val = NULL;
-                        xTaskCreate(update_both_value, "update hs and bp value", 8192, (void *) &sample_fn, 1, &handle_update_val);
-                    } else {
-                        xTaskCreate(update_bp_value, "update bp_value", 8192, (void *) &sample_fn, 1, &handle_update_bp_val);
-                    }
+                    spp_enable_notif[BP] = true;
+                    last_wake_time[BP] = xTaskGetTickCount();
+                    xTaskCreate(update_bp_value, "update bp_value", 8192, (void *) &sample_fn, 1, &handle_update_val[BP]);
                     break;
                 default:
                     break;
@@ -387,24 +360,24 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             break;
         case ESP_GATTS_SET_ATTR_VAL_EVT:
             ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_SET_ATTR_VAL_EVT");
-            if (param->set_attr_val.attr_handle == spp_handle_tab[SPP_IDX_HEARTSOUND_VAL] && spp_hs_enable_notif) {
+            if (param->set_attr_val.attr_handle == spp_handle_tab[SPP_IDX_HEARTSOUND_VAL] && spp_enable_notif[HS]) {
                 res = esp_ble_gatts_send_indicate(
                     spp_profile_tab[SPP_PROFILE_APP_IDX].gatts_if,
                     spp_profile_tab[SPP_PROFILE_APP_IDX].conn_id,
-                    spp_handle_tab[SPP_IDX_HEARTSOUND_VAL], sizeof(hs_value),
-                    (uint8_t *)&hs_value, false);
+                    spp_handle_tab[SPP_IDX_HEARTSOUND_VAL], sizeof(char_val[HS]),
+                    (uint8_t *)&char_val[HS], false);
                 if (res) {
                     ESP_LOGE(GATTS_TABLE_TAG, "send notification failed %d", res);
                 } else {
                     ESP_LOGI(GATTS_TABLE_TAG, "send notification successfully");
                 }
             }
-            if (param->set_attr_val.attr_handle == spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL] && spp_bp_enable_notif) {
+            if (param->set_attr_val.attr_handle == spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL] && spp_enable_notif[BP]) {
                 res = esp_ble_gatts_send_indicate(
                     spp_profile_tab[SPP_PROFILE_APP_IDX].gatts_if,
                     spp_profile_tab[SPP_PROFILE_APP_IDX].conn_id,
-                    spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL], sizeof(bp_value),
-                    (uint8_t *)&bp_value, false);
+                    spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL], sizeof(char_val[BP]),
+                    (uint8_t *)&char_val[BP], false);
                 if (res) {
                     ESP_LOGE(GATTS_TABLE_TAG, "send notification failed %d", res);
                 } else {
@@ -442,24 +415,18 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
         case ESP_GATTS_DISCONNECT_EVT:
             ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_DISCONNECT_EVT, reason = 0x%x",
                      param->disconnect.reason);
-            if (handle_update_hs_val) {
-                vTaskDelete(handle_update_hs_val);
-                handle_update_hs_val = NULL;
-            }
-            if (handle_update_bp_val) {
-                vTaskDelete(handle_update_bp_val);
-                handle_update_bp_val = NULL;
-            }
-            if (handle_update_val) {
-                vTaskDelete(handle_update_val);
-                handle_update_val = NULL;
+            for (size_t i = 0; i < CHAR_NUM; ++i) {
+                if (handle_update_val[i]) {
+                    vTaskDelete(handle_update_val[i]);
+                    handle_update_val[i] = NULL;
+                }
             }
             // reset client configuration descriptor
             uint8_t default_val[2] = {0x00, 0x00};
             esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_HEARTSOUND_CCC], sizeof(default_val), default_val);
-            spp_hs_enable_notif = false;
+            spp_enable_notif[HS] = false;
             esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_BLOODPRESSURE_CCC], sizeof(default_val), default_val);
-            spp_bp_enable_notif = false;
+            spp_enable_notif[BP] = false;
             // start advertising again
             esp_ble_gap_start_advertising(&spp_adv_params);
             break;
