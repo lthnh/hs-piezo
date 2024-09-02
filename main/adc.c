@@ -41,8 +41,6 @@ esp_err_t mcp320x_add(spi_host_device_t host, mcp320x_t *mcp320x) {
 }
 
 esp_err_t mcp320x_sample(mcp320x_t *mcp320x, uint16_t *result, mcp320x_ch_t ch) {
-    ESP_RETURN_ON_ERROR(spi_device_acquire_bus(mcp320x->handle, portMAX_DELAY),
-                        ADC_TAG, "device fails to acquire bus");
     *result = 0;
     if (mcp320x->single == false && trans_desc.tx_data[0] != START) {
         trans_desc.tx_data[0] = START;
@@ -62,7 +60,6 @@ esp_err_t mcp320x_sample(mcp320x_t *mcp320x, uint16_t *result, mcp320x_ch_t ch) 
         // printf("%u %.02f\n", value, voltage);
     }
     *result /= mcp320x->sampl_count;
-    spi_device_release_bus(mcp320x->handle);
     return ESP_OK;
 }
 

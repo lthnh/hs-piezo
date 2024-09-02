@@ -3,6 +3,10 @@
 
 #include <inttypes.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/FreeRTOSConfig.h"
+#include "freertos/semphr.h"
+
 #include "esp_gap_ble_api.h"
 #include "esp_gatts_api.h"
 #include "adc.h"
@@ -31,6 +35,7 @@ typedef enum {
 typedef struct {
     esp_err_t (*fn)(mcp320x_t *, uint16_t *, mcp320x_ch_t);
     mcp320x_t mcp320x;
+    SemaphoreHandle_t sem;
 } sample_fn_t;
 
 extern uint16_t spp_handle_tab[SPP_IDX_NUM];

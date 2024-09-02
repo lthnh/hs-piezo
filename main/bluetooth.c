@@ -2,10 +2,13 @@
 
 #include <inttypes.h>
 #include <string.h>
+#include <assert.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/FreeRTOSConfig.h"
+#include "freertos/projdefs.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 
 #include "esp_gap_ble_api.h"
 #include "esp_gatt_defs.h"
@@ -268,6 +271,7 @@ void gap_event_handler(esp_gap_ble_cb_event_t event,
     }
 }
 
+static SemaphoreHandle_t sem = NULL;
 static TaskHandle_t handle_update_val[CHAR_NUM] = {NULL};
 static TickType_t last_wake_time[CHAR_NUM];
 static const TickType_t freq = 1;
@@ -276,9 +280,13 @@ static void update_hs_value(void *pvParameters) {
     ESP_LOGI(UPDATE_VALUE_TAG, "update hs value task started");
     sample_fn_t sample_fn = *((sample_fn_t *)pvParameters);
     while (true) {
-        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &char_val[HS], CH0));
-        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_HEARTSOUND_VAL], sizeof(char_val[HS]), (uint8_t *)&char_val[HS]));
-        xTaskDelayUntil(&last_wake_time[HS], freq);
+        BaseType_t take = xSemaphoreTake(sample_fn.sem, portMAX_DELAY);
+        if (take == pdTRUE) {
+            ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &char_val[HS], CH0));
+            xSemaphoreGive(sample_fn.sem);
+            ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_HEARTSOUND_VAL], sizeof(char_val[HS]), (uint8_t *)&char_val[HS]));
+            xTaskDelayUntil(&last_wake_time[HS], freq);
+        }
     }
 }
 
@@ -286,9 +294,13 @@ static void update_bp_value(void *pvParameters) {
     ESP_LOGI(UPDATE_VALUE_TAG, "update bp value task started");
     sample_fn_t sample_fn = *((sample_fn_t *)pvParameters);
     while (true) {
-        ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &char_val[BP], CH2));
-        ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL], sizeof(char_val[BP]), (uint8_t *)&char_val[BP]));
-        xTaskDelayUntil(&last_wake_time[BP], freq);
+        BaseType_t take = xSemaphoreTake(sample_fn.sem, portMAX_DELAY);
+        if (take == pdTRUE) {
+            ESP_ERROR_CHECK(sample_fn.fn(&(sample_fn.mcp320x), &char_val[BP], CH2));
+            xSemaphoreGive(sample_fn.sem);
+            ESP_ERROR_CHECK(esp_ble_gatts_set_attr_value(spp_handle_tab[SPP_IDX_BLOODPRESSURE_VAL], sizeof(char_val[BP]), (uint8_t *)&char_val[BP]));
+            xTaskDelayUntil(&last_wake_time[BP], freq);
+        }
     }
 }
 
@@ -330,6 +342,11 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_WRITE_EVENT");
             esp_log_buffer_hex(GATTS_TABLE_TAG, param->write.value, param->write.len);
             if (param->write.handle == spp_handle_tab[SPP_IDX_HEARTSOUND_CCC]) {
+                if (!sem) {
+                    sem = xSemaphoreCreateMutex();
+                    assert(sem != NULL);
+                    sample_fn.sem = sem;
+                }
                 switch ((param->write.value)[0]) {
                 case 0x00:
                     spp_enable_notif[HS] = false;
@@ -344,6 +361,11 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
                 }
             }
             if (param->write.handle == spp_handle_tab[SPP_IDX_BLOODPRESSURE_CCC]) {
+                if (!sem) {
+                    sem = xSemaphoreCreateMutex();
+                    assert(sem != NULL);
+                    sample_fn.sem = sem;
+                }
                 switch ((param->write.value)[0]) {
                 case 0x00:
                     spp_enable_notif[BP] = false;
@@ -405,7 +427,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             conn_params.latency = 0;
             conn_params.max_int = 0x20;  // max_int = 0x20*1.25ms = 40ms
             conn_params.min_int = 0x10;  // min_int = 0x10*1.25ms = 20ms
-            conn_params.timeout = 400;   // timeout = 400*10ms = 4000ms
+            conn_params.timeout = 100;   // timeout = 100*10ms = 1000ms
             // start sent the update connection parameters to the peer device.
             esp_ble_gap_update_conn_params(&conn_params);
             // add conn_id to app profile table

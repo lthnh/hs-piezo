@@ -39,7 +39,7 @@ static spi_bus_config_t bus_config = {
     .flags = SPICOMMON_BUSFLAG_MASTER | SPICOMMON_BUSFLAG_SCLK |
     SPICOMMON_BUSFLAG_MISO | SPICOMMON_BUSFLAG_MISO |
     SPICOMMON_BUSFLAG_IOMUX_PINS,
-    .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,
+    .isr_cpu_id = ESP_INTR_CPU_AFFINITY_0,
     .intr_flags = ESP_INTR_FLAG_LEVEL3,
 };
 
